@@ -77,8 +77,27 @@
     .section { padding-block: 95px; }
     .gallery { columns: 3 250px; column-gap: 14px; }
     .gallery-item { display: inline-block; width: 100%; margin: 0 0 14px; overflow: hidden; break-inside: avoid; background: #17130e; }
-    .gallery-item img { width: 100%; height: auto; filter: saturate(.9); transition: transform .6s ease; }
+    .gallery-item img { width: 100%; height: auto; cursor: zoom-in; filter: saturate(.9); transition: transform .6s ease; user-select: none; -webkit-user-drag: none; }
     .gallery-item:hover img { transform: scale(1.025); }
+    .lightbox { width: 100%; max-width: none; height: 100%; max-height: none; padding: 70px 72px 38px; border: 0; background: rgb(5 5 5 / 96%); color: var(--ink); }
+    .lightbox::backdrop { background: rgb(0 0 0 / 88%); backdrop-filter: blur(7px); }
+    .lightbox[open] { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; grid-template-rows: 1fr; align-items: center; justify-items: center; gap: 20px; }
+    .lightbox-image { grid-column: 2; grid-row: 1; width: auto; height: auto; max-width: 100%; max-height: calc(100dvh - 118px); object-fit: contain; cursor: default; user-select: none; -webkit-user-drag: none; }
+    .lightbox-toolbar { position: absolute; top: 20px; right: 24px; left: 24px; display: flex; align-items: center; justify-content: space-between; color: var(--gold-light); font-size: 12px; }
+    .lightbox-control { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid #80632f; border-radius: 50%; background: #17130d; color: var(--gold-light); font-size: 25px; cursor: pointer; transition: background .2s ease, transform .2s ease; }
+    .lightbox-control:hover { transform: scale(1.06); background: #2a2113; }
+    .lightbox-control:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 3px; }
+    .lightbox-close { width: 42px; height: 42px; font-size: 28px; }
+    .lightbox-previous { grid-column: 1; grid-row: 1; }
+    .lightbox-next { grid-column: 3; grid-row: 1; }
+    @media (max-width: 600px) {
+      .lightbox { padding: 74px 12px 25px; }
+      .lightbox[open] { grid-template-columns: 40px minmax(0, 1fr) 40px; gap: 8px; }
+      .lightbox-control { width: 38px; height: 38px; font-size: 21px; }
+      .lightbox-close { width: 40px; height: 40px; font-size: 26px; }
+      .lightbox-image { max-width: calc(100vw - 112px); max-height: calc(100dvh - 125px); }
+      .lightbox-toolbar { top: 15px; right: 15px; left: 15px; }
+    }
 
     .outdoor { padding: 77px 0; border-block: 1px solid var(--line); background: radial-gradient(ellipse at 85% 50%, #292013, transparent 55%), #11100e; }
     .outdoor-grid { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 26px; }
@@ -366,6 +385,16 @@
     </section>
   </main>
 
+  <dialog class="lightbox" id="photo-lightbox" aria-label="Foto ampliada" aria-modal="true">
+    <div class="lightbox-toolbar">
+      <span id="lightbox-count" aria-live="polite"></span>
+      <button class="lightbox-control lightbox-close" id="lightbox-close" type="button" aria-label="Cerrar foto ampliada">×</button>
+    </div>
+    <button class="lightbox-control lightbox-previous" id="lightbox-previous" type="button" aria-label="Ver foto anterior">‹</button>
+    <img class="lightbox-image" id="lightbox-image" alt="" draggable="false">
+    <button class="lightbox-control lightbox-next" id="lightbox-next" type="button" aria-label="Ver foto siguiente">›</button>
+  </dialog>
+
   <footer class="footer">
     <div class="footer-inner wrap">
       <a class="brand" href="#inicio"><img src="assets/juan-hernandez-logo.png" alt=""><span>Juan Hernández<br>Fotografía</span></a>
@@ -408,6 +437,70 @@
         menuToggle.setAttribute("aria-expanded", "false");
         menuToggle.setAttribute("aria-label", "Abrir menú");
       });
+    });
+
+    const galleryImages = Array.from(document.querySelectorAll(".gallery-item img"));
+    const lightbox = document.querySelector("#photo-lightbox");
+    const lightboxImage = document.querySelector("#lightbox-image");
+    const lightboxCount = document.querySelector("#lightbox-count");
+    let activePhotoIndex = 0;
+
+    function showGalleryPhoto(index) {
+      activePhotoIndex = (index + galleryImages.length) % galleryImages.length;
+      const selectedPhoto = galleryImages[activePhotoIndex];
+      lightboxImage.src = selectedPhoto.currentSrc || selectedPhoto.src;
+      lightboxImage.alt = selectedPhoto.alt;
+      lightboxCount.textContent = `${activePhotoIndex + 1} / ${galleryImages.length}`;
+    }
+
+    function openGalleryPhoto(image) {
+      showGalleryPhoto(galleryImages.indexOf(image));
+      lightbox.showModal();
+      document.querySelector("#lightbox-close").focus();
+    }
+
+    galleryImages.forEach((image, index) => {
+      image.draggable = false;
+      image.tabIndex = 0;
+      image.setAttribute("role", "button");
+      image.setAttribute("aria-label", `Ampliar foto ${index + 1}: ${image.alt}`);
+      image.addEventListener("click", () => openGalleryPhoto(image));
+      image.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openGalleryPhoto(image);
+        }
+      });
+    });
+
+    document.addEventListener("contextmenu", (event) => {
+      if (event.target instanceof Element && event.target.closest("img")) {
+        event.preventDefault();
+      }
+    });
+    document.addEventListener("dragstart", (event) => {
+      if (event.target instanceof HTMLImageElement) {
+        event.preventDefault();
+      }
+    });
+
+    document.querySelector("#lightbox-close").addEventListener("click", () => lightbox.close());
+    document.querySelector("#lightbox-previous").addEventListener("click", () => showGalleryPhoto(activePhotoIndex - 1));
+    document.querySelector("#lightbox-next").addEventListener("click", () => showGalleryPhoto(activePhotoIndex + 1));
+    lightbox.addEventListener("click", (event) => {
+      if (event.target === lightbox) {
+        lightbox.close();
+      }
+    });
+    lightbox.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        lightbox.close();
+      } else if (event.key === "ArrowLeft") {
+        showGalleryPhoto(activePhotoIndex - 1);
+      } else if (event.key === "ArrowRight") {
+        showGalleryPhoto(activePhotoIndex + 1);
+      }
     });
 
     const eventDate = document.querySelector("#event-date");
